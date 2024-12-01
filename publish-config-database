@@ -1,0 +1,39 @@
+#!/usr/bin/env php
+
+<?php
+
+$targetDir = getcwd() . '/config';
+
+if (!file_exists($targetDir)) {
+    mkdir($targetDir);
+}
+
+$sourceFile = __DIR__ . '/src/Config/config.php';
+$targetFile = "$targetDir/database.php";
+
+if (!file_exists($targetFile)) {
+    copy($sourceFile, $targetFile);
+}
+
+$databaseDir = getcwd() . '/database';
+
+if (!file_exists($databaseDir)) {
+    mkdir($databaseDir);
+}
+
+$gitignoreFile = "$sessionDir/.gitignore";
+
+if (!file_exists($gitignoreFile)) {
+    touch($gitignoreFile);
+
+    file_put_contents(
+        $gitignoreFile,
+        <<<EOF
+            *.sql
+            *.sqlite
+            *.sqlite3
+        EOF
+    );
+}
+
+exit(0);

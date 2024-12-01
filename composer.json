@@ -1,0 +1,30 @@
+{
+    "name": "joshuamc1/database",
+    "description": "Database library",
+    "type": "library",
+    "scripts": {
+        "test": "phpunit --colors=always --testdox"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.4"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "JoshuaMc1\\Database\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "JoshuaMc1",
+            "email": "joshua15mclean@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "bin": [
+        "publish-config-database"
+    ]
+}
