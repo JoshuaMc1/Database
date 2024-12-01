@@ -2,6 +2,7 @@
 
 namespace JoshuaMc1\Database\Queries;
 
+use JoshuaMc1\Database\Models\BaseModel;
 use PDO;
 
 class QueryBuilder
@@ -11,6 +12,7 @@ class QueryBuilder
     protected array $conditions = [];
     protected array $fields = ['*'];
     protected array $bindings = [];
+    protected ?string $modelClass = null;
 
     public function __construct(PDO $pdo, string $table)
     {
@@ -31,6 +33,12 @@ class QueryBuilder
         return $this;
     }
 
+    public function setModel(string $modelClass): self
+    {
+        $this->modelClass = $modelClass;
+        return $this;
+    }
+
     public function get(): array
     {
         $sql = $this->buildQuery();
@@ -42,10 +50,16 @@ class QueryBuilder
 
         $statement->execute();
 
-        return $statement->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($this->modelClass) {
+            return array_map([$this->modelClass, 'createInstance'], $rows);
+        }
+
+        return $rows;
     }
 
-    public function first(): array
+    public function first(): ?BaseModel
     {
         $sql = $this->buildQuery() . " LIMIT 1";
         $statement = $this->pdo->prepare($sql);
@@ -56,7 +70,13 @@ class QueryBuilder
 
         $statement->execute();
 
-        return $statement->fetch(PDO::FETCH_ASSOC);
+        $result = $statement->fetch(PDO::FETCH_ASSOC);
+
+        if ($result && $this->modelClass && method_exists($this->modelClass, 'createInstance')) {
+            return $this->modelClass::createInstance($result);
+        }
+
+        return null;
     }
 
     public function insert(array $data): int
@@ -76,7 +96,7 @@ class QueryBuilder
         return $this->pdo->lastInsertId();
     }
 
-    public function update(array $data): int
+    public function update(array $data, array $conditions = []): int
     {
         $set = [];
         foreach ($data as $key => $value) {
@@ -85,9 +105,12 @@ class QueryBuilder
 
         $sql = "UPDATE {$this->table} SET " . implode(', ', $set);
 
-        if (!empty($this->conditions)) {
-            $conditions = array_map(fn($c) => $c->toSql(), $this->conditions);
-            $sql .= " WHERE " . implode(' AND ', $conditions);
+        if (!empty($conditions)) {
+            $conditionsStr = [];
+            foreach ($conditions as $column => $value) {
+                $conditionsStr[] = "$column = :$column";
+            }
+            $sql .= " WHERE " . implode(' AND ', $conditionsStr);
         }
 
         $statement = $this->pdo->prepare($sql);
@@ -96,8 +119,8 @@ class QueryBuilder
             $statement->bindValue(":$key", $value);
         }
 
-        foreach ($this->bindings as $index => $value) {
-            $statement->bindValue($index + 1, $value);
+        foreach ($conditions as $column => $value) {
+            $statement->bindValue(":$column", $value);
         }
 
         $statement->execute();
@@ -111,17 +134,13 @@ class QueryBuilder
             throw new \Exception("No conditions provided for delete operation.");
         }
 
-        $sql = "DELETE FROM {$this->table}";
-
-        if (!empty($this->conditions)) {
-            $conditions = array_map(fn($c) => $c->toSql(), $this->conditions);
-            $sql .= " WHERE " . implode(' AND ', $conditions);
-        }
+        $conditions = array_map(fn($c) => $c->toSql(), $this->conditions);
+        $sql = "DELETE FROM {$this->table} WHERE " . implode(' AND ', $conditions);
 
         $statement = $this->pdo->prepare($sql);
 
-        foreach ($this->bindings as $index => $value) {
-            $statement->bindValue($index + 1, $value);
+        foreach ($this->conditions as $condition) {
+            $statement->bindValue($condition->getPlaceholder(), $condition->getValue());
         }
 
         $statement->execute();
@@ -214,6 +233,7 @@ class QueryBuilder
         }
 
         $statement->execute();
+
         return $statement->fetchAll(PDO::FETCH_COLUMN);
     }
 
