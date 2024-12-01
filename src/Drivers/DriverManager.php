@@ -20,7 +20,7 @@ class DriverManager
 
     public static function createDefaultDriver(): Driver
     {
-        $configPath = sprintf('%s/../../../../config/database.php', __DIR__);
+        $configPath = sprintf('%s/../../../../../config/database.php', __DIR__);
         $config = ConfigLoader::load($configPath);
 
         $defaultDriver = $config['default'] ?? null;

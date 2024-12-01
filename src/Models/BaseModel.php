@@ -7,14 +7,14 @@ use JoshuaMc1\Database\Queries\QueryBuilder;
 
 abstract class BaseModel
 {
-    protected string $table;
-    protected array $attributes = [];
-    protected array $original = [];
+    protected $table;
+    protected $attributes = [];
+    protected $original = [];
 
-    protected array $fillable = [];
-    protected array $guarded = ['*'];
+    protected $fillable = [];
+    protected $guarded = ['*'];
 
-    protected array $hidden = [];
+    protected $hidden = [];
 
     public function __construct(array $attributes = [])
     {
@@ -28,8 +28,15 @@ abstract class BaseModel
 
     public static function query(): QueryBuilder
     {
+        $builder = new QueryBuilder(self::getDriver()->getPdo(), (new static())->getTable());
+        return $builder->setModel(static::class);
+    }
+
+    public static function createInstance(array $attributes): static
+    {
         $instance = new static();
-        return new QueryBuilder(self::getDriver()->getPdo(), $instance->getTable());
+        $instance->fillAttributes($attributes);
+        return $instance;
     }
 
     public function getTable(): string
@@ -47,14 +54,20 @@ abstract class BaseModel
     protected function fillAttributes(array $attributes): void
     {
         foreach ($attributes as $key => $value) {
-            if ($this->isFillable($key)) {
+            if ($key === 'id' || $this->isFillable($key)) {
                 $this->attributes[$key] = $value;
+
+                $this->original[$key] = $value;
             }
         }
     }
 
     public function isFillable(string $key): bool
     {
+        if ($key === 'id') {
+            return true;
+        }
+
         if (in_array($key, $this->fillable)) {
             return true;
         }
@@ -97,7 +110,13 @@ abstract class BaseModel
         $query = self::query();
 
         if (isset($this->original['id'])) {
-            $query->update($this->attributes, ['id' => $this->original['id']]);
+            $attributesToUpdate = array_filter(
+                $this->attributes,
+                fn($key) => $key !== 'id',
+                ARRAY_FILTER_USE_KEY
+            );
+
+            $query->update($attributesToUpdate, ['id' => $this->original['id']]);
         } else {
             $id = $query->insert($this->attributes);
             $this->original['id'] = $id;
@@ -109,7 +128,18 @@ abstract class BaseModel
 
     public function delete(): bool
     {
-        return self::query()->delete(['id' => $this->original['id']]);
+        if (!isset($this->original['id'])) {
+            throw new \Exception("No ID found for delete operation.");
+        }
+
+        $deleted = self::query()->where('id', '=', $this->original['id'])->delete();
+
+        if ($deleted) {
+            $this->attributes = [];
+            $this->original = [];
+        }
+
+        return $deleted;
     }
 
     public function refresh(): void
@@ -122,12 +152,10 @@ abstract class BaseModel
         return isset($this->original['id']) && !empty($this->original['id']);
     }
 
-    public static function find($id): ?self
+    public static function find($id)
     {
-        $instance = new static();
-        $result = $instance->query()->where('id', '=', $id)->first();
-
-        return $result ? $instance->fillAttributes($result) : null;
+        return self::query()->where('id', '=', $id)
+            ->first();
     }
 
     public static function where(string $column, string $operator, $value): QueryBuilder
@@ -155,29 +183,15 @@ abstract class BaseModel
         return self::query()->pluck($column);
     }
 
-    public static function get(): array
+    public static function findOrFail($id)
     {
-        $queryResult = self::query()->get();
-        $instances = [];
+        $result = self::find($id);
 
-        foreach ($queryResult as $attributes) {
-            $instance = new static();
-            $instance->fillAttributes($attributes);
-            $instances[] = $instance;
+        if (!$result) {
+            throw new \Exception("Model not found with ID {$id}");
         }
 
-        return $instances;
-    }
-
-    public static function findOrFail($id): self
-    {
-        $instance = self::find($id);
-
-        if (!$instance) {
-            throw new \Exception("Model not found with ID: $id");
-        }
-
-        return $instance;
+        return $result;
     }
 
     public function updateAttributes(array $attributes): bool
@@ -186,17 +200,13 @@ abstract class BaseModel
         return self::query()->update($attributes, ['id' => $this->original['id']]) > 0;
     }
 
+    public static function select(array $columns): QueryBuilder
+    {
+        return self::query()->select($columns);
+    }
+
     public static function all(): array
     {
-        $queryResult = self::query()->get();
-        $instances = [];
-
-        foreach ($queryResult as $attributes) {
-            $instance = new static();
-            $instance->fillAttributes($attributes);
-            $instances[] = $instance;
-        }
-
-        return $instances;
+        return self::query()->get();
     }
 }

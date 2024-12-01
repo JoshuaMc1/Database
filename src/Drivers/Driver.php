@@ -13,7 +13,7 @@ abstract class Driver
 
     protected function getConfig(string $driverName): array
     {
-        $configPath = sprintf('%s/../../../../config/config.php', __DIR__);
+        $configPath = sprintf('%s/../../../../../config/database.php', __DIR__);
         $config = ConfigLoader::load($configPath);
 
         if (!isset($config['connections'][$driverName])) {
